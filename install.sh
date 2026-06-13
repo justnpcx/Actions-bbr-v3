@@ -225,71 +225,6 @@ ensure_ookla_speedtest() {
     )
 }
 
-# 函数：选择中国境内测速运营商
-select_china_speedtest_isp() {
-    local choice=""
-
-    echo -e "\033[36m请选择中国境内测速运营商：\033[0m" >&2
-    echo -e "\033[33m 1. 自动匹配三大运营商\033[0m" >&2
-    echo -e "\033[33m 2. 中国移动 / CMCC\033[0m" >&2
-    echo -e "\033[33m 3. 中国联通 / CUCC\033[0m" >&2
-    echo -e "\033[33m 4. 中国电信 / CTCC\033[0m" >&2
-    echo -n -e "\033[36m请选择 (1-4，默认 1): \033[0m" >&2
-    read -r choice
-    choice="${choice:-1}"
-
-    case "$choice" in
-        2)
-            SPEEDTEST_ISP_LABEL="中国移动"
-            SPEEDTEST_ISP_PATTERN='(Mobile|CMCC|China Mobile|中国移动|移动)'
-            ;;
-        3)
-            SPEEDTEST_ISP_LABEL="中国联通"
-            SPEEDTEST_ISP_PATTERN='(Unicom|CUCC|China Unicom|中国联通|联通)'
-            ;;
-        4)
-            SPEEDTEST_ISP_LABEL="中国电信"
-            SPEEDTEST_ISP_PATTERN='(Telecom|CTCC|China Telecom|中国电信|电信)'
-            ;;
-        *)
-            SPEEDTEST_ISP_LABEL="三大运营商自动匹配"
-            SPEEDTEST_ISP_PATTERN='(Mobile|CMCC|China Mobile|中国移动|移动|Unicom|CUCC|China Unicom|中国联通|联通|Telecom|CTCC|China Telecom|中国电信|电信)'
-            ;;
-    esac
-}
-
-# 函数：从 Ookla server list 中筛选中国境内节点
-get_china_speedtest_servers() {
-    local isp_pattern="$1"
-    local server_output
-    local china_pattern='(China|Beijing|Shanghai|Guangzhou|Shenzhen|Hangzhou|Nanjing|Wuhan|Chengdu|Chongqing|Tianjin|Xi.?an|Zhengzhou|Changsha|Jinan|Qingdao|Fuzhou|Xiamen|Hefei|Suzhou|Ningbo|Dongguan|Foshan|中国|北京|上海|广州|深圳|杭州|南京|武汉|成都|重庆|天津|西安|郑州|长沙|济南|青岛|福州|厦门|合肥|苏州|宁波|东莞|佛山)'
-
-    server_output=$(speedtest --accept-license --accept-gdpr --servers 2>/dev/null || true)
-    if [[ -z "$server_output" ]]; then
-        return 1
-    fi
-
-    echo "$server_output" \
-        | grep -Ei "$china_pattern" \
-        | grep -Ei "$isp_pattern" \
-        | sed -nE 's/^[[:space:]]*([0-9]+).*/\1/p'
-}
-
-# 函数：从 Ookla server list 中筛选中国境内不限运营商节点
-get_any_china_speedtest_servers() {
-    local server_output
-    local china_pattern='(China|Beijing|Shanghai|Guangzhou|Shenzhen|Hangzhou|Nanjing|Wuhan|Chengdu|Chongqing|Tianjin|Xi.?an|Zhengzhou|Changsha|Jinan|Qingdao|Fuzhou|Xiamen|Hefei|Suzhou|Ningbo|Dongguan|Foshan|中国|北京|上海|广州|深圳|杭州|南京|武汉|成都|重庆|天津|西安|郑州|长沙|济南|青岛|福州|厦门|合肥|苏州|宁波|东莞|佛山)'
-
-    server_output=$(speedtest --accept-license --accept-gdpr --servers 2>/dev/null || true)
-    if [[ -z "$server_output" ]]; then
-        return 1
-    fi
-
-    echo "$server_output" \
-        | grep -Ei "$china_pattern" \
-        | sed -nE 's/^[[:space:]]*([0-9]+).*/\1/p'
-}
-
 # 函数：运行 Ookla Speedtest 并解析 Ping/Download/Upload
 run_speedtest_measurement() {
     SPEEDTEST_PING=""
@@ -298,19 +233,12 @@ run_speedtest_measurement() {
 
     ensure_ookla_speedtest || return 1
 
-    select_china_speedtest_isp
     echo -e "\033[36m正在运行 Ookla Speedtest 测速，请稍候...\033[0m"
-    echo -e "\033[36m优先选择：中国境内最近的 ${SPEEDTEST_ISP_LABEL} 节点\033[0m"
     local servers_list
     local speedtest_output=""
     local attempt=0
-    servers_list=$(get_china_speedtest_servers "$SPEEDTEST_ISP_PATTERN" | head -n 10)
+    servers_list=$(speedtest --accept-license --accept-gdpr --servers 2>/dev/null | sed -nE 's/^[[:space:]]*([0-9]+).*/\1/p' | head -n 10)
     if [[ -z "$servers_list" ]]; then
-        echo -e "\033[33m⚠ 未找到匹配运营商的中国境内节点，改用中国境内不限运营商节点。\033[0m"
-        servers_list=$(get_any_china_speedtest_servers | head -n 10)
-    fi
-    if [[ -z "$servers_list" ]]; then
-        echo -e "\033[33m⚠ 未找到中国境内节点，改用 Ookla 自动选择。\033[0m"
         servers_list="auto"
     fi
 
